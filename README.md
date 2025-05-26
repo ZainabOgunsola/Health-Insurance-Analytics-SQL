@@ -1,5 +1,6 @@
 # Health-Insurance-Analytics-SQL
 📊 Insurance Analytics with SQL
+
 Welcome to the Insurance Analytics SQL Project! This project explores various aspects of an insurance database to derive key insights on policy performance, customer behavior, and claims analysis using SQL queries.
 
 🚀 Project Objective
