@@ -1,0 +1,128 @@
+ -- Which policy type has the highest average claim amount?
+SELECT 
+	policy_type, 
+	ROUND(AVG(claim_amount), 2) AS Average_claim_amount
+FROM policies p
+JOIN claims c
+ON p.policy_id = c.policy_id
+Group BY policy_type
+ORDER BY Average_claim_amount DESC
+
+ --What is the average premium collected and claim payout ratio per policy type
+SELECT 
+	policy_type, 
+	ROUND(AVG(premium_amount),2) AS "Average Premium Amount", 
+	ROUND(AVG(claim_amount),2) AS "Average Claim Amount", 
+	ROUND(AVG(claim_amount) / AVG(premium_amount), 2) AS "Claim Payout Ratio"
+FROM policies p
+JOIN claims c
+ON p.policy_id = c.policy_id
+GROUP BY policy_type
+
+ --  How many claims were rejected in the last 12 months, and what are the common types?
+SELECT 
+	claim_type,
+	COUNT(*) AS rejected_claims
+FROM claims
+WHERE 
+	claim_status = 'Rejected' 
+	AND claim_date >= DATEADD(YEAR, -1,GETDATE())
+GROUP BY claim_type
+ORDER BY rejected_claims DESC
+
+ --  Who are the top 10 policyholders with the highest total approved claims?
+SELECT TOP(10) full_name, 
+	ROUND(SUM(claim_amount),2) total_approved_claims
+FROM policyholders ph
+JOIN policies p
+ON ph.policyholder_id = p.policyholder_id
+JOIN claims c
+ON p.policy_id = c.policy_id
+WHERE claim_status = 'Approved'
+GROUP BY full_name
+ORDER BY total_approved_claims DESC
+
+ -- What is the distribution of policyholders by age group and gender?
+SELECT 
+    CASE 
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 18 AND 25 THEN '18-25'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 26 AND 35 THEN '26-35'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 36 AND 45 THEN '36-45'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 46 AND 60 THEN '46-60'
+		ELSE '60+'
+END AS Age_group,
+	gender,
+	COUNT(*) AS num_policyholders
+FROM policyholders
+GROUP BY 
+	CASE 
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 18 AND 25 THEN '18-25'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 26 AND 35 THEN '26-35'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 36 AND 45 THEN '36-45'
+		WHEN DATEDIFF(YEAR, date_of_birth, GETDATE()) BETWEEN 46 AND 60 THEN '46-60'
+		ELSE '60+'
+	END,
+	gender
+ORDER BY Age_group,gender
+
+ --Which policyholders have active policies but have not filed any claims in the past year?
+
+SELECT
+	ph.policyholder_id,
+	ph.full_name,
+	p.policy_id,
+	p.status
+FROM policyholders ph
+JOIN policies p
+ON ph.policyholder_id = p.policyholder_id
+LEFT JOIN claims c ON p.policy_id = c.policy_id AND claim_date >= DATEADD(YEAR, -1, GETDATE())
+WHERE 
+	p.status = 'Active' 
+	AND c.claim_id IS NULL
+
+ -- What is the claim approval rate (%) per claim type.
+SELECT 
+	claim_type, 
+	ROUND(
+	100.0 * SUM(CASE WHEN claim_status = 'Approved' THEN 1 ELSE 0 END) / COUNT(*)
+	, 2) AS claims_approval_rate
+FROM claims
+GROUP BY claim_type
+ORDER BY claims_approval_rate DESC
+
+ -- What percentage of policies have Expired or been cancelled, and what was their average premium?
+SELECT 
+	policy_type, 
+	ROUND(100.0 * SUM(CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END) / COUNT(*)
+	,2) AS Cancelled_policy_rate,
+	ROUND(100.0 * SUM(CASE WHEN status = 'Expired' THEN 1 ELSE 0 END) / COUNT(*)
+	,2) AS Lapsed_policy_rate,
+	ROUND(AVG(premium_amount),2) Average_Premium_amount
+FROM policies
+GROUP BY policy_type
+
+ -- What is the average turnaround time between policy start date and first claim submission? 
+WITH FirstClaimDates AS (
+    SELECT 
+        policy_id,
+        MIN(claim_date) AS first_claim_date
+    FROM claims
+    GROUP BY policy_id
+)
+SELECT 
+    ROUND(AVG(DATEDIFF(DAY, p.start_date, fc.first_claim_date) * 1.0), 2) AS avg_turnaround_days
+FROM policies p
+JOIN FirstClaimDates fc ON p.policy_id = fc.policy_id;
+
+  -- Which policyholders have multiple policies and what’s their total premium and claim amount?
+ SELECT 
+    ph.full_name,
+    COUNT(DISTINCT p.policy_id) AS num_policies,
+    ROUND(SUM(p.premium_amount), 2) AS total_premium, 
+    ROUND(SUM(c.claim_amount), 2) AS total_claim_amount
+FROM policyholders ph
+JOIN policies p ON ph.policyholder_id = p.policyholder_id
+LEFT JOIN claims c ON p.policy_id = c.policy_id
+GROUP BY ph.full_name
+HAVING COUNT(DISTINCT p.policy_id) > 1
+ 
